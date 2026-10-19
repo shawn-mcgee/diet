@@ -1,6 +1,6 @@
 # Daily
 
-A mobile-first, static diet and weight tracker. No runtime dependencies or server to host. Google sign-in connects a personal Google Sheet through Apps Script. Local mode works without setup.
+A mobile-first, static diet and weight tracker. No runtime dependencies or server to host. Google sign-in connects a personal Google Sheet through Apps Script. When Google is configured, sign-in is required before viewing or editing the workspace. Without Google configuration, the app runs in clearly marked local mode.
 
 ## Run
 
@@ -46,7 +46,7 @@ This is a single-user application. Your public client ID goes in the static app;
 
 5. **Deploy → New deployment → Web app**. Execute as **Me**; access **Anyone**. Authorize the spreadsheet and external request permissions. The public endpoint verifies the Google token and the allowed email before reading or writing any data. Workspace administrators may restrict this deployment option.
 6. Copy the deployment URL ending in `/exec` into `config.js` as `appsScriptUrl`; set `googleClientId` to the OAuth client ID. Do not use `/dev`.
-7. Open Settings and sign in. A new Sheet is initialized from the starter library on the first successful sync. Local-mode records stay separate. To move local records to the connected Sheet, export in local mode, sign in, then import the file.
+7. Sign in using the button on the opening screen. A new Sheet is initialized from the starter library on the first successful sync. Local-mode records stay separate and are preserved. If local records exist, the opening screen provides an export button. To move them to the connected Sheet, export before signing in, then import the file from Settings after signing in. Import replaces the Sheet's app data.
 
 On later backend changes, create a new version under **Deploy → Manage deployments → Edit** and retain the same deployment URL. After changing `src/core.js`, run `npm run sync:validation` and update `Validation.gs` too. The tests check that these files match.
 
@@ -64,7 +64,7 @@ The `Diet` tab stores the complete application snapshot and two directly editabl
 
 Do not rename the tab, move rows, or edit encoded chunks. The other tabs in your spreadsheet are untouched. Base64 is an encoding, not encryption; keep the Sheet private. One range write saves settings and the snapshot together. A content hash detects both other-device writes and direct Sheet goal edits; a script lock serializes writes. A conflicting device retains its local data and stops uploading. Export it, load the Sheet, then re-enter/import the desired changes. Import replaces the entire current state.
 
-The browser caches data per Google user for recovery; local mode uses a separate cache. Changes remain on the device if sync fails and retry after reconnection or via Retry sync. Tokens expire; sign out/in if requested. Load Sheet to fetch edits from other devices. Clearing browser storage removes local-only or unsynced data. Export backups before clearing it. The app supports offline editing after loading, but is not an installable offline PWA.
+The browser caches data per Google user for recovery; local mode uses a separate cache. With Google configured, each page load opens a prominent sign-in screen and editing is blocked until authentication and Sheet loading succeed. Existing device data is preserved. Tokens stay in memory, so reloading requires signing in again. After sign-in, changes remain on the device if sync fails and retry after reconnection or via Retry sync. A persistent warning appears on every page while changes have not reached Sheets; only a successful save shows **Saved to Sheets**. Tokens expire; sign out/in if requested. Load Sheet to fetch edits from other devices. Clearing browser storage removes local-only or unsynced data. Export backups before clearing it. The app supports offline editing after signing in and loading, but is not an installable offline PWA.
 
 ## GitHub Pages
 

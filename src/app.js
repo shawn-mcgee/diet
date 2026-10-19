@@ -13,6 +13,7 @@ let saved = readCache(storageKey);
 let state = saved?.state || newState();
 let dirty = Boolean(saved?.dirty), generation = 0;
 let recipeDraft = null;
+let googleInitialized = false;
 
 function readCache(key) {
   try {
@@ -21,8 +22,8 @@ function readCache(key) {
     return cached;
   } catch { return null; }
 }
-function cache() {
-  try { localStorage.setItem(storageKey, JSON.stringify({ state, revision, dirty })); }
+function cache(nextState = state, nextDirty = dirty) {
+  try { localStorage.setItem(storageKey, JSON.stringify({ state: nextState, revision, dirty: nextDirty })); }
   catch { throw Error('Device storage is full or unavailable. Export a backup before closing.'); }
 }
 function notice(message) {
@@ -32,11 +33,12 @@ function notice(message) {
   notice.timer = setTimeout(() => $('#notice').classList.remove('show'), 5500);
 }
 function commit(next) {
+  if (configured && !user) throw Error('Sign in with Google before making changes.');
   validateState(next);
+  cache(next, true);
   state = next;
   dirty = true;
   generation++;
-  cache();
   render();
   if (token && !blocked) void sync();
 }
@@ -91,6 +93,7 @@ async function signIn(credential) {
     token = null;
     user = null;
     ({ state, dirty, revision, storageKey } = previous);
+    syncError = error.message;
     notice(error.message);
   } finally { busy = false; render(); }
   if (token && dirty && !blocked) void sync();
@@ -127,11 +130,11 @@ async function refresh() {
 function items() { return [...state.foods, ...state.recipes].sort((a, b) => a.name.localeCompare(b.name)); }
 function item(id) { return items().find(i => i.id === id); }
 function statusText() {
-  if (!user) return 'On this device';
+  if (!user) return configured ? busy ? 'Connecting to Sheets…' : 'Sign in required' : 'Local only · not synced';
   if (busy) return 'Syncing…';
   if (blocked) return 'Sync conflict';
-  if (syncError) return 'Not synced';
-  return dirty ? 'Changes pending' : 'Saved to Sheets';
+  if (syncError) return 'Not saved to Sheets';
+  return dirty ? 'Not saved to Sheets' : 'Saved to Sheets';
 }
 function renderStatus() {
   if ($('#sync-status')) {
@@ -142,16 +145,25 @@ function renderStatus() {
     $('#sync-detail').textContent = syncError;
     $('#sync-detail').hidden = !syncError;
   }
+  if ($('#sync-warning')) {
+    $('#sync-warning').hidden = !user || (!dirty && !syncError);
+    $('#pending-message').textContent = busy ? 'Saving changes to Google Sheets…' : 'Changes are saved on this device but have not been saved to Google Sheets.';
+  }
   document.querySelectorAll('[data-action="sync"], [data-action="refresh"], [data-action="logout"]').forEach(b => b.disabled = busy);
 }
 function render() {
+  const locked = configured && !user;
   const labels = { day: 'Daily log', library: 'Foods & recipes', trends: 'Trends', settings: 'Settings' };
   $('#app').innerHTML = `<header class="header"><a class="brand" href="#day" aria-label="Daily home"><span class="brand-mark">d.</span> daily<span class="brand-caption">diet & weight</span></a><span id="sync-status" class="status">${statusText()}</span></header>
-    <nav class="nav" aria-label="Main navigation">${Object.entries(labels).map(([id, name]) => `<button data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${name}</button>`).join('')}</nav>
-    <main><p id="sync-detail" class="sync-error" ${syncError ? '' : 'hidden'}>${esc(syncError)}</p>${tab === 'day' ? renderDay() : tab === 'library' ? renderLibrary() : tab === 'trends' ? renderTrends() : renderSettings()}</main>
-    <footer><span>kcal · protein in g · weight in lbs</span><span>${user ? esc(user.email) : 'Local mode'}</span></footer>`;
-  if (tab === 'settings') initGoogleButton();
+    <nav class="nav" aria-label="Main navigation" ${locked ? 'hidden' : ''}>${Object.entries(labels).map(([id, name]) => `<button data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${name}</button>`).join('')}</nav>
+    <main><p id="sync-detail" class="sync-error" role="alert" ${syncError ? '' : 'hidden'}>${esc(syncError)}</p><section id="sync-warning" class="sync-warning" role="status" hidden><p id="pending-message"></p><div class="button-group"><button class="secondary" data-action="sync">Retry sync</button><button class="secondary" data-action="refresh">Load Sheet</button><button class="text-button" data-action="export">Export backup</button></div></section>${locked ? renderSignIn() : tab === 'day' ? renderDay() : tab === 'library' ? renderLibrary() : tab === 'trends' ? renderTrends() : renderSettings()}</main>
+    <footer><span>kcal · protein in g · weight in lbs</span><span>${user ? esc(user.email) : configured ? 'Signed out · editing disabled' : 'Local mode · not synced'}</span></footer>`;
+  if (locked && !busy) initGoogleButton();
   renderStatus();
+}
+function renderSignIn() {
+  const hasLocalData = dirty || state.meals.length || state.weights.length || state.recipes.length;
+  return `<section class="panel sign-in-panel"><div class="eyebrow">GOOGLE SHEETS</div><h1>Sign in to sync</h1><p>Your foods, recipes, meals, goals, and weights are saved to your Google Sheet.</p><p class="muted">Sign in before adding or changing data. After saving, check for “Saved to Sheets” at the top.</p>${busy ? '<p role="status">Connecting to Google Sheets…</p>' : '<div id="google-button"></div>'}${hasLocalData ? '<div class="local-recovery"><strong>Existing data on this device is preserved.</strong><p>Export it before signing in. You can import the backup after signing in; importing replaces the Sheet’s app data.</p><button class="secondary" data-action="export">Export device backup</button></div>' : ''}</section>`;
 }
 function renderDay() {
   const total = dailyTotals(state, day);
@@ -222,12 +234,15 @@ function renderSettings() {
     <section class="panel settings-panel"><h2>Backup</h2><div class="button-group"><button class="secondary" data-action="export">Export JSON</button><label class="secondary file-label">Import JSON<input id="import" type="file" accept="application/json,.json" class="sr-only"></label></div><p class="muted small">Import replaces the current library and logs. Export before replacing data.</p></section>`;
 }
 function initGoogleButton() {
-  if (!configured || user) return;
+  if (!configured || user || !$('#google-button')) return;
   if (!window.google?.accounts?.id) {
     $('#google-button').innerHTML = '<button class="secondary" data-action="google-retry">Load Google sign-in</button>';
     return;
   }
-  google.accounts.id.initialize({ client_id: config.googleClientId, callback: response => signIn(response.credential), auto_select: false });
+  if (!googleInitialized) {
+    google.accounts.id.initialize({ client_id: config.googleClientId, callback: response => signIn(response.credential), auto_select: false });
+    googleInitialized = true;
+  }
   google.accounts.id.renderButton($('#google-button'), { theme: 'outline', size: 'large', text: 'signin_with', width: 250 });
 }
 
@@ -386,6 +401,8 @@ document.addEventListener('click', event => {
   const button = event.target.closest('[data-action]');
   if (!button) return;
   const id = button.dataset.id;
+  const writes = ['add-meal', 'edit-meal', 'log-item', 'add-food', 'add-recipe', 'edit-item', 'add-weight', 'delete-weight'];
+  if (configured && !user && writes.includes(button.dataset.action)) { render(); return; }
   switch (button.dataset.action) {
     case 'prev': day = shiftDate(day, -1); render(); break;
     case 'next': day = shiftDate(day, 1); render(); break;
@@ -435,3 +452,4 @@ document.addEventListener('submit', event => {
 window.addEventListener('online', () => { if (token && dirty) void sync(); });
 window.addEventListener('beforeunload', event => { if (user && dirty) { event.preventDefault(); event.returnValue = ''; } });
 render();
+document.querySelector('script[src="https://accounts.google.com/gsi/client"]')?.addEventListener('load', initGoogleButton);
