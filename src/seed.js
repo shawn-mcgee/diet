@@ -1,0 +1,45 @@
+// Approximate generic values; preparation and brands vary. All gram entries are per 100 g.
+// Names include preparation state so cooked and raw weights are not interchanged.
+const rows = [
+  ['Chicken breast, roasted', 'Meat & fish', 165, 31],
+  ['Chicken breast, raw', 'Meat & fish', 120, 22.5],
+  ['Ground beef, 90% lean, raw', 'Meat & fish', 176, 20.1],
+  ['Salmon, Atlantic, cooked', 'Meat & fish', 206, 22.1],
+  ['Tuna, canned in water, drained', 'Meat & fish', 116, 25.5],
+  ['Egg, whole, raw', 'Eggs & dairy', 143, 12.6],
+  ['Egg white, raw', 'Eggs & dairy', 52, 10.9],
+  ['Greek yogurt, plain, nonfat', 'Eggs & dairy', 59, 10.2],
+  ['Cottage cheese, 2%', 'Eggs & dairy', 81, 10.5],
+  ['Milk, 2%', 'Eggs & dairy', 50, 3.3],
+  ['Cheddar cheese', 'Eggs & dairy', 403, 24.9],
+  ['Apple, with skin', 'Fruit', 52, 0.3],
+  ['Banana', 'Fruit', 89, 1.1],
+  ['Blueberries', 'Fruit', 57, 0.7],
+  ['Strawberries', 'Fruit', 32, 0.7],
+  ['Orange', 'Fruit', 47, 0.9],
+  ['Avocado', 'Fruit', 160, 2],
+  ['Broccoli, raw', 'Vegetables', 34, 2.8],
+  ['Spinach, raw', 'Vegetables', 23, 2.9],
+  ['Carrot, raw', 'Vegetables', 41, 0.9],
+  ['Tomato, raw', 'Vegetables', 18, 0.9],
+  ['Onion, raw', 'Vegetables', 40, 1.1],
+  ['Potato, baked, with skin', 'Vegetables', 93, 2.5],
+  ['Sweet potato, baked', 'Vegetables', 90, 2],
+  ['Rice, white, cooked', 'Grains & beans', 130, 2.7],
+  ['Oats, dry', 'Grains & beans', 379, 13.2],
+  ['Pasta, cooked', 'Grains & beans', 158, 5.8],
+  ['Black beans, cooked', 'Grains & beans', 132, 8.9],
+  ['Lentils, cooked', 'Grains & beans', 116, 9],
+  ['Olive oil', 'Oils & nuts', 884, 0],
+  ['Butter', 'Oils & nuts', 717, 0.9],
+  ['Almonds', 'Oils & nuts', 579, 21.2],
+  ['Peanut butter, smooth', 'Oils & nuts', 588, 25.1],
+];
+export function newState() {
+  return {
+    schema: 1,
+    settings: { calorieLimit: 2000, proteinGoal: 120 },
+    foods: rows.map(([name, category, calories, protein], i) => ({ id: `food-${i + 1}`, name, category, portionSize: '100 g', quantity: 100, unit: 'g', calories, protein })),
+    recipes: [], meals: [], weights: [],
+  };
+}
